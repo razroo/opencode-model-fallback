@@ -33,7 +33,31 @@ export function readFallbackModels(
 	const agentConfig = agents[agentName]
 	if (!isRecord(agentConfig)) return []
 
-	return normalizeFallbackModelsField(agentConfig.fallback_models)
+	// Two shapes supported:
+	//
+	// 1. `opencode.json:agent.<name>.fallback_models` — top-level. This is
+	//    what users write directly in opencode.json.
+	//
+	// 2. `.opencode/agents/<name>.md` YAML frontmatter — when opencode
+	//    parses MD-defined agents, it keeps known schema fields at the
+	//    top level (model, temperature, tools, etc.) and relocates
+	//    unknown keys into an `options` sub-object. `fallback_models`
+	//    is unknown to opencode's agent schema, so frontmatter-authored
+	//    chains land at `agentConfig.options.fallback_models`.
+	//
+	// Check the top-level first (explicit wins over frontmatter), then
+	// fall back to the options path. This lets a consumer override an
+	// upstream-shipped chain by adding their own `agent.<name>.fallback_models`
+	// block to opencode.json.
+	const topLevel = normalizeFallbackModelsField(agentConfig.fallback_models)
+	if (topLevel.length > 0) return topLevel
+
+	const options = agentConfig.options
+	if (isRecord(options)) {
+		return normalizeFallbackModelsField(options.fallback_models)
+	}
+
+	return []
 }
 
 export function resolveAgentForSession(

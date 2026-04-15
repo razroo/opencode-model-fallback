@@ -95,6 +95,65 @@ describe("config-reader", () => {
 				expect(result).toEqual([])
 			})
 		})
+
+		describe("#when fallback_models lives under agent.options (MD frontmatter shape)", () => {
+			test("#then reads from options.fallback_models", () => {
+				// Opencode relocates unknown MD frontmatter keys (e.g.
+				// fallback_models) into a nested `options` sub-object when
+				// agents are defined via `.opencode/agents/*.md`.
+				const agents = {
+					"general-free": {
+						model: "opencode/big-pickle",
+						options: {
+							fallback_models: [
+								"opencode/minimax-m2.5-free",
+								"opencode/glm-5.1",
+							],
+						},
+					},
+				}
+
+				const result = readFallbackModels("general-free", agents)
+
+				expect(result).toEqual([
+					"opencode/minimax-m2.5-free",
+					"opencode/glm-5.1",
+				])
+			})
+		})
+
+		describe("#when fallback_models set at BOTH top-level and options", () => {
+			test("#then top-level wins (explicit opencode.json overrides MD frontmatter)", () => {
+				const agents = {
+					"general-free": {
+						model: "opencode/big-pickle",
+						fallback_models: ["override-from-opencode-json"],
+						options: {
+							fallback_models: ["from-frontmatter"],
+						},
+					},
+				}
+
+				const result = readFallbackModels("general-free", agents)
+
+				expect(result).toEqual(["override-from-opencode-json"])
+			})
+		})
+
+		describe("#when options is present but has no fallback_models", () => {
+			test("#then returns empty array", () => {
+				const agents = {
+					opus: {
+						model: "anthropic/claude-opus-4-6",
+						options: { some_other_opencode_opt: true },
+					},
+				}
+
+				const result = readFallbackModels("opus", agents)
+
+				expect(result).toEqual([])
+			})
+		})
 	})
 
 	describe("#given resolveAgentForSession", () => {

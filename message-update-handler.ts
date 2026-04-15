@@ -505,7 +505,8 @@ export function createMessageUpdateHandler(deps: HookDeps, helpers: AutoRetryHel
 						state.currentModel,
 						"compaction",
 						"message.updated.compaction-stale",
-						undefined
+						undefined,
+						error
 					)
 					return
 				}
@@ -636,7 +637,8 @@ export function createMessageUpdateHandler(deps: HookDeps, helpers: AutoRetryHel
 						plan.newModel,
 						resolvedAgent,
 						"message.updated",
-						plan
+						plan,
+						error
 					)
 				}
 			} finally {

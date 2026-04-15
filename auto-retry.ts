@@ -3,6 +3,27 @@ import { logInfo, logError } from "./logger"
 import { getFallbackModelsForSession, resolveAgentForSession } from "./config-reader"
 import { prepareFallback, planFallback, commitFallback, createFallbackState } from "./fallback-state"
 import { replayWithDegradation } from "./message-replay"
+import { getErrorMessage, extractStatusCode } from "./error-classifier"
+
+/** Summarize an error for logging: status code + truncated message.
+ *  Intentionally small — the log file is for operators, not stack traces. */
+function summarizeTriggerError(error: unknown):
+	| { message: string; status?: number; name?: string }
+	| undefined {
+	if (!error) return undefined
+	const message = getErrorMessage(error)
+	const status = extractStatusCode(error)
+	const name =
+		typeof (error as { name?: unknown }).name === "string"
+			? ((error as { name: string }).name)
+			: undefined
+	if (!message && status === undefined && !name) return undefined
+	return {
+		message: message.length > 240 ? `${message.slice(0, 240)}…` : message,
+		...(status !== undefined ? { status } : {}),
+		...(name ? { name } : {}),
+	}
+}
 
 const SESSION_TTL_MS = 30 * 60 * 1000
 
@@ -189,7 +210,12 @@ export function createAutoRetryHelpers(deps: HookDeps) {
 		newModel: string,
 		resolvedAgent: string | undefined,
 		source: string,
-		plan?: FallbackPlan
+		plan?: FallbackPlan,
+		/** Error that triggered the rotation. Optional, backward-compat.
+		 *  When provided, surfaces as `triggerError` in the "Auto-retrying
+		 *  with fallback model" log entry so operators can correlate
+		 *  rotations with upstream errors without cross-referencing. */
+		triggerError?: unknown
 	): Promise<boolean> => {
 		// Track whether we skipped because another handler owns the dispatch.
 		// In that case, the finally block must NOT clear sessionAwaitingFallbackResult.
@@ -613,11 +639,13 @@ export function createAutoRetryHelpers(deps: HookDeps) {
 				// Cleared in the finally block if dispatch fails.
 				sessionAwaitingFallbackResult.add(sessionID)
 
+				const triggerErrorSummary = summarizeTriggerError(triggerError)
 				logInfo(`Auto-retrying with fallback model (${source})`, {
 					sessionID,
 					model: newModel,
 					agent: resolvedAgent,
 					replaySource,
+					...(triggerErrorSummary ? { triggerError: triggerErrorSummary } : {}),
 				})
 
 				// Cast raw parts to MessagePart (runtime parts may have any shape).

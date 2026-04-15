@@ -17,6 +17,30 @@ import { join } from "path"
 import { parse as parseJsonc } from "jsonc-parser"
 import { logInfo } from "./logger"
 
+/** Validate that each fallback model string looks like `provider/model`.
+ *  At dispatch time the rotation silently skips malformed entries, which
+ *  can mask typos for a long time; warn loudly once per bad entry here
+ *  so operators can catch config errors in the first log line. */
+const MODEL_FORMAT = /^[^/\s][^\s]*\/[^\s]+$/
+function validateFallbackModels(
+	models: string[],
+	context: { scope: string; agent?: string }
+): void {
+	for (const model of models) {
+		if (typeof model !== "string" || !MODEL_FORMAT.test(model)) {
+			logInfo(
+				"Invalid fallback_models entry — expected 'provider/model' format",
+				{
+					invalidEntry: typeof model === "string" ? model : String(model),
+					scope: context.scope,
+					...(context.agent ? { agent: context.agent } : {}),
+					hint: "Rotations that reach this entry will be skipped. Fix in opencode.json.",
+				}
+			)
+		}
+	}
+}
+
 declare function setInterval(
 	callback: () => void,
 	delay: number
@@ -53,6 +77,7 @@ export default async function OpenCodeFallbackPlugin(
 	let fileConfig: Partial<FallbackPluginConfig> = loadPluginConfig(ctx.directory)
 	let mergedConfig: Required<FallbackPluginConfig> | undefined
 	const globalFallbackModels = normalizeFallbackModelsField(fileConfig.fallback_models)
+	validateFallbackModels(globalFallbackModels, { scope: "global" })
 
 	// Config getter that builds config on first access
 	const getConfig = (): Required<FallbackPluginConfig> => {
@@ -136,7 +161,7 @@ export default async function OpenCodeFallbackPlugin(
 			// Try 'agents' (plural) first, then 'agent' (singular)
 			const agentsValue = opencodeConfig.agents
 			const agentValue = opencodeConfig.agent
-			
+
 			if (agentsValue && typeof agentsValue === "object" && !Array.isArray(agentsValue)) {
 				agentConfigs = agentsValue as Record<string, unknown>
 			} else if (agentValue && typeof agentValue === "object" && !Array.isArray(agentValue)) {
@@ -144,7 +169,22 @@ export default async function OpenCodeFallbackPlugin(
 			} else {
 				agentConfigs = undefined
 			}
-			
+
+			// Walk every agent's fallback_models once at init and warn about
+			// malformed entries.  Cheap (N agents × K fallback models) and
+			// surfaces typos in the first log line instead of silently
+			// skipping them at dispatch time under load.
+			if (agentConfigs) {
+				for (const [agentName, rawAgentCfg] of Object.entries(agentConfigs)) {
+					if (!rawAgentCfg || typeof rawAgentCfg !== "object") continue
+					const agentCfg = rawAgentCfg as Record<string, unknown>
+					const fm = agentCfg.fallback_models
+					if (fm === undefined) continue
+					const models = normalizeFallbackModelsField(fm as string | string[])
+					validateFallbackModels(models, { scope: "agent", agent: agentName })
+				}
+			}
+
 			logInfo(`Plugin initialized with ${agentConfigs ? Object.keys(agentConfigs).length : 0} agents`)
 		},
 

@@ -230,7 +230,8 @@ export function createEventHandler(deps: HookDeps, helpers: AutoRetryHelpers) {
 								plan.newModel,
 								resolvedAgent,
 								"session.idle.silent-failure",
-								plan
+								plan,
+								{ message: "Model went idle without producing tokens", name: "SilentModelFailure" }
 							)
 						} else {
 							logInfo("session.idle silent failure — no more fallback models available", {
@@ -388,7 +389,8 @@ export function createEventHandler(deps: HookDeps, helpers: AutoRetryHelpers) {
 					plan.newModel,
 					resolvedAgent,
 					"session.status",
-					plan
+					plan,
+					{ message: status.message || "Provider auto-retry signal", name: "ProviderRetrySignal" }
 				)
 			} else if (!plan.success) {
 				logError("session.status fallback failed", {
@@ -682,7 +684,8 @@ export function createEventHandler(deps: HookDeps, helpers: AutoRetryHelpers) {
 					plan.newModel,
 					resolvedAgent,
 					"session.error",
-					plan
+					plan,
+					error
 				)
 			} else {
 				logError("Fallback preparation failed", {
@@ -778,7 +781,8 @@ export function createEventHandler(deps: HookDeps, helpers: AutoRetryHelpers) {
 				plan.newModel,
 				resolvedAgent,
 				"session.status.immediate",
-				plan
+				plan,
+				{ message: status.message || "Provider retry too slow", name: "ProviderRetryTooSlow" }
 			)
 		} else if (!plan.success) {
 			logError("Immediate fallback preparation failed", {

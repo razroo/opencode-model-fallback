@@ -911,7 +911,8 @@ describe("message-update-handler", () => {
 					"anthropic/claude-sonnet-4-6",     // current fallback model
 					"compaction",                        // agent
 					"message.updated.compaction-stale",  // source
-					undefined                            // no plan (not advancing chain)
+					undefined,                           // no plan (not advancing chain)
+					{ name: "UnknownError", message: "auth failed" }  // trigger error (6th arg)
 				)
 			})
 		})

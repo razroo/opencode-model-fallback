@@ -24,17 +24,60 @@ jobs:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
 
+      - name: Set version from release tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Verify package.json version matches release tag
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [ "$PKG_VERSION" != "$VERSION" ]; then
+            echo "::error::package.json version ($PKG_VERSION) != release tag ($VERSION). Update package.json and re-tag."
+            exit 1
+          fi
+          echo "Versions match: $VERSION"
+
+      - name: Verify CI passed for this commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Wait for the push-triggered `CI` workflow on this exact commit to
+          # complete successfully before publishing. `release: published` often
+          # fires before the push-triggered CI has even registered its check-run
+          # — polling rather than a single snapshot.
+          SHA=$(git rev-parse HEAD)
+          echo "Verifying CI status for $SHA"
+          DEADLINE=$(( $(date +%s) + 1800 ))  # 30 min
+          STATUS=""
+          CONCLUSION=""
+          while [ "$(date +%s)" -lt "$DEADLINE" ]; do
+            read -r STATUS CONCLUSION <<<"$(gh api "repos/${{ github.repository }}/commits/$SHA/check-runs" \
+              --jq '[.check_runs[] | select(.name == "build-and-test")] | sort_by(.started_at) | last | "\(.status // "missing") \(.conclusion // "null")"')"
+            echo "CI check-run: status=$STATUS conclusion=$CONCLUSION"
+            if [ "$STATUS" = "completed" ]; then
+              break
+            fi
+            sleep 15
+          done
+          if [ "$STATUS" != "completed" ]; then
+            echo "::error::CI for $SHA never completed within 30min. Investigate the CI workflow run."
+            exit 1
+          fi
+          if [ "$CONCLUSION" != "success" ]; then
+            echo "::error::CI for $SHA did not succeed (conclusion: $CONCLUSION). Fix the red CI run before re-releasing."
+            exit 1
+          fi
+          echo "CI succeeded for $SHA"
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Typecheck
-        run: bun run typecheck
-
       - name: Build
+        # Re-build inside the release job so the published dist/ is
+        # reproducible from the tagged source, not whatever happened to
+        # be committed.
         run: bun run build
-
-      - name: Test
-        run: bun run test
 
       - name: Verify dist/ built
         run: |

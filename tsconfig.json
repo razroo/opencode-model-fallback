@@ -8,10 +8,10 @@
     "declaration": true,
     "declarationDir": "dist",
     "outDir": "dist",
-    "rootDir": ".",
+    "rootDir": "src",
     "types": ["bun-types"],
     "skipLibCheck": true
   },
-  "include": ["*.ts"],
-  "exclude": ["*.test.ts", "dist/", "build.ts"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts", "dist/", "build.ts"]
 }

@@ -17,14 +17,14 @@ Automatic model fallback plugin for [OpenCode](https://github.com/sst/opencode).
 ## Installation
 
 ```bash
-npm install opencode-model-fallback
+npm install @razroo/opencode-model-fallback
 ```
 
 Then add the plugin to your `opencode.json`:
 
 ```json
 {
-  "plugin": ["opencode-model-fallback"]
+  "plugin": ["@razroo/opencode-model-fallback"]
 }
 ```
 
